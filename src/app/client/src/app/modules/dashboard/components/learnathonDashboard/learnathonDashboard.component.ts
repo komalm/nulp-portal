@@ -12,6 +12,7 @@ import * as _ from "lodash-es";
 import { DomSanitizer } from "@angular/platform-browser";
 import { LearnerService, UserService, SearchService } from "@sunbird/core";
 import {
+  ServerResponse,
   ToasterService,
   ResourceService,
   INoResultMessage,
@@ -29,6 +30,7 @@ import * as moment from "moment";
 import { windowWhen } from "rxjs/operators";
 import { WorkSpace } from "../../../workspace/classes/workspace";
 import { WorkSpaceService } from "../../../workspace/services";
+// import { Console } from "console";
 // import { ContentSectionModule } from 'content-section';
 
 @Component({
@@ -72,6 +74,7 @@ export class learnathonDashboardComponent extends WorkSpace implements OnInit {
   noResultMessage: INoResultMessage;
   private activatedRoute: ActivatedRoute;
   telemetryImpression: IImpressionEventInput;
+  exportAccess: boolean = false;
   // layoutConfiguration: any;
   constructor(
     public searchService: SearchService,
@@ -94,8 +97,14 @@ export class learnathonDashboardComponent extends WorkSpace implements OnInit {
     this.https
       .get(this.configService.urlConFig.URLS.FILE_READ)
       .subscribe((data) => {
+        this.getAllContent();
         this.votelist = data["result"].data;
+      },(err) => {
+        console.log(err);
+        this.getAllContent();
+        // this.toasterService.error(this.resourceService.messages.emsg.m0007);
       });
+      
     this.activatedRoute.queryParams.subscribe((params) => {
       this.queryParams = params;
       if (this.pageName != undefined && this.pageName != this.queryParams) {
@@ -103,9 +112,14 @@ export class learnathonDashboardComponent extends WorkSpace implements OnInit {
       }
       this.pageName = _.get(this.queryParams, "selectedTab");
     });
+    const loggedInUserRoles = _.get(this.userService, 'userProfile.userRoles');
+
+     if( _.includes(loggedInUserRoles, 'SYSTEM_ADMINISTRATION')){
+      this.exportAccess = true;
+    }
     this.cols = [];
     this.initializeDateFields();
-    this.getAllContent();
+    
     // this.getOrgList();
     this.getOrgDetails();
   }
@@ -114,7 +128,7 @@ export class learnathonDashboardComponent extends WorkSpace implements OnInit {
     this.fromDate = new Date(this.moment.subtract(7, "days"));
     this.toDate = new Date();
   }
-  getAllContent() {
+   getAllContent() {
     let status: any[];
     if (this.pageName == "upForVote") {
       status = ["Live"];
@@ -129,20 +143,10 @@ export class learnathonDashboardComponent extends WorkSpace implements OnInit {
         "FlagReview",
       ];
     }
-    const data = {
+
+    const searchParams = {
       filters: {
         status: status,
-        primaryCategory: [
-          "Course",
-          "Digital Textbook",
-          "Content Playlist",
-          "Explanation Content",
-          "Learning Resource",
-          "Practice Question Set",
-          "eTextbook",
-          "Teacher Resource",
-          "Course Assessment",
-        ],
         objectType: "Content",
         // framework: ["nulp-learn"],
         framework: localStorage.getItem("learnathonFramework"),
@@ -158,34 +162,14 @@ export class learnathonDashboardComponent extends WorkSpace implements OnInit {
           "video/webm",
           "text/x-url",
         ],
+
         contentType: ["Course", "Resource", "Collection"],
       },
-      fields: [
-        "identifier",
-        "creator",
-        "organisation",
-        "name",
-        "contentType",
-        "createdFor",
-        "channel",
-        "board",
-        "medium",
-        "gradeLevel",
-        "subject",
-        "category",
-        "lastUpdatedOn",
-        "status",
-        "createdBy",
-        "createdOn",
-        "framework",
-      ],
-      limit: 10000,
-      // offset: (pageNumber - 1) * (limit),
-      offset: 0,
-      query: "",
+      limit: 50,
+      offset: (1 - 1) * 10,
     };
 
-    this.searchService.compositeSearch(data).subscribe(
+    this.searchService.contentSearch(searchParams).subscribe(
       (response) => {
         this.UserNameValues = [];
         if (_.get(response, "responseCode") === "OK") {
@@ -227,17 +211,7 @@ export class learnathonDashboardComponent extends WorkSpace implements OnInit {
                   );
                 }
               }
-              // if (!_.isEmpty(obj.channel)) {
-              //   obj.departmentName = _.lowerCase(_.get(_.find(self.allOrgName, { 'id': obj.channel }), 'orgName'));
-              // } else {
-              //   obj.departmentName = '';
-              // }
               obj.UserName = obj.creator;
-              // if (!_.isEmpty(obj.createdBy)) {
-              //   obj.UserName = _.get(_.find(self.allUserName, { 'id': obj.createdBy }), 'firstName') + " " + _.get(_.find(self.allUserName, { 'id': obj.createdBy }), 'lastName');
-              // } else {
-              //   obj.UserName = '';
-              // }
             });
             this.noResult = false;
             this.tableData = [];
@@ -252,29 +226,44 @@ export class learnathonDashboardComponent extends WorkSpace implements OnInit {
                   },
                 },
               };
-              this.learnerService.post(options).subscribe((response) => {
-                element["category"] =
-                  response.result.response.content[0].framework.category[0];
-                element["subcategory"] =
-                  response.result.response.content[0].framework.subcategory[0];
-                element["city"] =
-                  response.result.response.content[0].framework.city[0];
-                element["institute"] =
-                  response.result.response.content[0].framework.institution[0];
+               this.learnerService.post(options).subscribe((response) => {
+                  element["category"] = response.result.response.content[0]
+                  .framework.category[0]
+                  ? response.result.response.content[0].framework.category[0]
+                  : "";
+                
+                element["subcategory"] = response.result.response.content[0]
+                  .framework.subcategory[0]
+                  ? response.result.response.content[0].framework.subcategory[0]
+                  : "";
+                element["city"] = response.result.response.content[0].framework
+                  .city[0]
+                  ? response.result.response.content[0].framework.city[0]
+                  : "";
+                element["institute"] = response.result.response.content[0]
+                  .framework.institution[0]
+                  ? response.result.response.content[0].framework.institution[0]
+                  : "";
+                
               });
 
               this.UserNameValues.push({
                 label: element.UserName,
                 value: element.UserName,
               });
-
+              var count = 0;
               let tempData = JSON.stringify(this.votelist);
-              let count = tempData.split(element.identifier).length - 1;
+              if (tempData) {
+                count = tempData.split(element.identifier).length - 1;
+              element["votes"] = count;
+
+              } else {
+                count = 0;
+              }
 
               element["votes"] = count;
               finalObj.push(element);
             });
-            console.log("finalObj-----", finalObj);
             this.tableData = finalObj;
             // this.finalObj.push(this.tableData);
             // this.tableData = _.get(this.selectedCity, 'orgName') != 'All' ? _.filter(tempObj, { OrgName: _.get(this.selectedCity, 'orgName') }) : tempObj;
@@ -390,7 +379,7 @@ export class learnathonDashboardComponent extends WorkSpace implements OnInit {
         { field: "city", header: "City" },
         { field: "institute", header: "Institute" },
         { field: "board", header: "Theme" },
-        { field: "medium", header: "Sub-Theme" }
+        { field: "medium", header: "Sub-Theme" },
 
         // { field: "name", header: "Name", width: "170px" },
         // { field: "category", header: "Category", width: "170px" },

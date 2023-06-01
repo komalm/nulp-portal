@@ -30,6 +30,8 @@ import { UUID } from "angular2-uuid";
 import dayjs from "dayjs";
 // import { DataService } from 'src/app/modules/core';
 import { ConfigService } from "@sunbird/shared";
+import { Location } from '@angular/common';
+
 
 @Component({
   selector: "app-upforreview-contentplayer",
@@ -152,6 +154,7 @@ export class UpforreviewContentplayerComponent implements OnInit, OnDestroy {
   votelist: any;
   canVote: boolean = true;
   learnathonContent: boolean = false;
+  now:any;
   /**
   * Constructor to create injected service(s) object
   Default method of Draft Component class
@@ -170,7 +173,8 @@ export class UpforreviewContentplayerComponent implements OnInit, OnDestroy {
     public https: HttpClient,
     public config: ConfigService,
     public navigationHelperService: NavigationHelperService,
-    router: Router
+    router: Router,
+    private location: Location
   ) {
     this.resourceService = resourceService;
     this.playerService = playerService;
@@ -211,7 +215,6 @@ export class UpforreviewContentplayerComponent implements OnInit, OnDestroy {
     }
   }
   ngOnInit() {
-    //this.baseUrl = this.config.urlConFig.URLS.EXT_PLUGIN_PREFIX;
     this.baseUrl = "https://nulp.niua.org/";
 
     this.initLayout();
@@ -230,13 +233,13 @@ export class UpforreviewContentplayerComponent implements OnInit, OnDestroy {
       const arrayOfObj = Object.entries(this.votelist).map((e) => ({
         [e[0]]: e[1],
       }));
+      var i = 0
       arrayOfObj.forEach((element) => {
-        if (
-          element[0]["userId"] === this.userId &&
-          element[0]["contentId"] == this.contentId
-        ) {
-          this.canVote = false;
+        if (element[i]["userId"] === this.userId && element[i]["contentId"] == this.contentId ) {
+          this.canVote = false; 
+          return;
         }
+        i++;
       });
     });
   }
@@ -328,9 +331,12 @@ export class UpforreviewContentplayerComponent implements OnInit, OnDestroy {
    * @memberof ContentPlayerComponent
    */
   close() {
-    this.navigationHelperService.navigateToWorkSpace(
-      "/workspace/content/upForReview/1"
-    );
+    if(this.contentData.framework == "nulp-learn"){
+      this.location.back();
+    }else{
+      this.navigationHelperService.navigateToWorkSpace(
+      "/workspace/content/upForReview/1");
+    }  
   }
 
   setInteractEventData() {
@@ -427,8 +433,12 @@ export class UpforreviewContentplayerComponent implements OnInit, OnDestroy {
     if (this.showCenterAlignedModal == true) {
       return;
     } else {
-      const httpOptions: HttpOptions = {
-        // headers: { "Content-Type": "application/json" },
+      var today = new Date();
+      var date = today.getFullYear()+'-'+(today.getMonth()+1)+'-'+today.getDate();
+      var time = today.getHours() + ":" + today.getMinutes() + ":" + today.getSeconds();
+      this.now = date+' '+time;
+
+      const httpOptions: HttpOptions = {       
         body: [
           {
             userId: this.userId,
@@ -438,7 +448,8 @@ export class UpforreviewContentplayerComponent implements OnInit, OnDestroy {
             UserMobile: this.mobile,
             userEmail: this.email,
             userCity: this.city,
-            reasonOfVote: this.reason,
+            reasonOfVote: this.reason.replace(/['"]+/g, ''),
+            votedOn:this.now 
           },
         ],
       };
